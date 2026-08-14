@@ -20,19 +20,33 @@ my sub bisearch($ucs, @table) {
     False
 }
 
+# Widths are memoized per codepoint: wcwidth is a pure function of the
+# codepoint, so a hit is a hash lookup instead of up to two bisearches over
+# the range tables. The cache is bounded (WIDTH-CACHE-MAX entries); once
+# full, new codepoints fall through to the tables while existing entries
+# keep serving. Semantics are unchanged.
+my %width-cache;
+my constant WIDTH-CACHE-MAX = 65_536;
+
 my sub wcwidth(Int:D $ucs) is export {
-    ($ucs == 0 | 0x034F | 0x2028 | 0x2029)
-      || 0x200B <= $ucs <= 0x200F
-      || 0x202A <= $ucs <= 0x202E
-      || 0x2060 <= $ucs <= 0x2063
-      ?? 0
-      !! $ucs < 32 || 0x07f <= $ucs < 0x0A0
-        ?? -1
-        !! bisearch($ucs, ZERO_WIDTH)
+    with %width-cache{$ucs} {
+        return $_;
+    }
+    my $w =
+        ($ucs == 0 | 0x034F | 0x2028 | 0x2029)
+          || 0x200B <= $ucs <= 0x200F
+          || 0x202A <= $ucs <= 0x202E
+          || 0x2060 <= $ucs <= 0x2063
           ?? 0
-          !! bisearch($ucs, WIDE_EASTASIAN)
-            ?? 2
-            !! 1
+          !! $ucs < 32 || 0x07f <= $ucs < 0x0A0
+            ?? -1
+            !! bisearch($ucs, ZERO_WIDTH)
+              ?? 0
+              !! bisearch($ucs, WIDE_EASTASIAN)
+                ?? 2
+                !! 1;
+    %width-cache{$ucs} = $w if %width-cache.elems < WIDTH-CACHE-MAX;
+    $w
 }
 
 my sub wcswidth($str) is export {
@@ -95,6 +109,9 @@ Returns:
 =item C<0> for a character that does not advance the cursor (NULL or combining)
 =item C<1> for most characters
 =item C<2> for full width characters
+
+Results are memoized per codepoint (bounded cache): repeated calls for the
+same codepoint are hash lookups. The returned values are unchanged.
 
 =head2 C<wcswidth>
 

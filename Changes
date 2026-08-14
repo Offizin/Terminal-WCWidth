@@ -1,6 +1,7 @@
 Revision history for Terminal::WCWidth
 
 {{$NEXT}}
+    - Memoize wcwidth results per codepoint (bounded cache); semantics unchanged
 
 0.1.5  2026-04-21T21:43:27+02:00
     - Add support for VS-16 flag, bduggan++

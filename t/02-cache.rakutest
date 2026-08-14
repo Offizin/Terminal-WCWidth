@@ -1,0 +1,74 @@
+use Test;
+use Terminal::WCWidth;
+use Terminal::WCWidth::Tables;
+
+# The memoized wcwidth must agree with a reference implementation of the
+# pre-memoization logic (same special-case chain, same bisearch) for every
+# codepoint probed — the cache may speed up, never change, results.
+my sub bisearch($ucs, @table) {
+    my $lower = 0;
+    my $upper = @table.elems - 1;
+    return False if $ucs < @table[0][0] || $ucs > @table[$upper][1];
+
+    while $upper >= $lower {
+        my $mid = ($lower + $upper) +> 1;
+        if $ucs > @table[$mid][1] {
+            $lower = $mid + 1;
+        }
+        elsif $ucs < @table[$mid][0] {
+            $upper = $mid - 1;
+        }
+        else {
+            return True;
+        }
+    }
+    False
+}
+
+my sub reference-width(Int $ucs) {
+    ($ucs == 0 | 0x034F | 0x2028 | 0x2029)
+      || 0x200B <= $ucs <= 0x200F
+      || 0x202A <= $ucs <= 0x202E
+      || 0x2060 <= $ucs <= 0x2063
+      ?? 0
+      !! $ucs < 32 || 0x07f <= $ucs < 0x0A0
+        ?? -1
+        !! bisearch($ucs, ZERO_WIDTH)
+          ?? 0
+          !! bisearch($ucs, WIDE_EASTASIAN)
+            ?? 2
+            !! 1
+}
+
+# 1. Every boundary of both tables (lo-1/lo/hi/hi+1) — exactly where
+#    bisearch off-by-one errors live — plus the special-case ranges, a
+#    uniform step sweep over the full codepoint space, and plane edges.
+my @probes;
+for ZERO_WIDTH, WIDE_EASTASIAN -> @table {
+    for @table -> ($lo, $hi) {
+        @probes.push($lo - 1) if $lo > 0;
+        @probes.push($lo);
+        @probes.push($hi);
+        @probes.push($hi + 1) if $hi < 0x10FFFF;
+    }
+}
+@probes.push($_) for 0, 1, 0x1F, 0x20, 0x7F, 0x9F, 0xA0, 0x034F,
+    0x200B, 0x200F, 0x202A, 0x202E, 0x2060, 0x2063,
+    0x3000, 0x3042, 0xFFFD, 0x10000, 0x1F44D, 0x20000, 0xE0000, 0x10FFFF;
+@probes.append(0, 0x1000 ... 0x10FFFF);   # uniform step sweep
+
+my @uprobes = @probes.unique.sort;
+my @mismatch = @uprobes.grep({ wcwidth($_) != reference-width($_) });
+is @mismatch, [], 'wcwidth == reference at table boundaries, special cases, and step sweep';
+
+# 2. Repeatability through the warm cache.
+is-deeply @uprobes.map(&wcwidth), @uprobes.map(&reference-width),
+    'warm cache repeats match the reference';
+
+# 3. The documented contract values.
+is wcwidth(0x07), -1, 'BEL (0x07) is -1 (control character)';
+is wcwidth(0x200B), 0, 'ZERO WIDTH SPACE (0x200B) is 0';
+is wcwidth(0x3042), 2, 'HIRAGANA A (0x3042) is 2 (full width)';
+is wcwidth(0x41), 1, 'LATIN A (0x41) is 1';
+
+# vim: expandtab shiftwidth=4
