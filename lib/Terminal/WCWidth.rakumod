@@ -24,7 +24,8 @@ my sub bisearch($ucs, @table) {
 # codepoint, so a hit is a hash lookup instead of up to two bisearches over
 # the range tables. The cache is bounded (WIDTH-CACHE-MAX entries); once
 # full, new codepoints fall through to the tables while existing entries
-# keep serving. Semantics are unchanged.
+# keep serving. Semantics are unchanged — a codepoint's width is always one
+# of: -1 control character, 0 zero-width, 1 narrow, 2 full-width.
 my %width-cache;
 my constant WIDTH-CACHE-MAX = 65_536;
 
@@ -103,12 +104,12 @@ wcwidth(0x3042) # "あ" - returns 2
 
 =end code
 
-Returns:
+Returns the terminal column width of a codepoint:
 
-=item C<-1> for a control character
+=item C<-1> for a control character (not printable)
 =item C<0> for a character that does not advance the cursor (NULL or combining)
-=item C<1> for most characters
-=item C<2> for full width characters
+=item C<1> for most characters (narrow)
+=item C<2> for full width characters (wide)
 
 Results are memoized per codepoint (bounded cache): repeated calls for the
 same codepoint are hash lookups. The returned values are unchanged.

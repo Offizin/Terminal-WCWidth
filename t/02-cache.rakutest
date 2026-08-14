@@ -65,7 +65,9 @@ is @mismatch, [], 'wcwidth == reference at table boundaries, special cases, and 
 is-deeply @uprobes.map(&wcwidth), @uprobes.map(&reference-width),
     'warm cache repeats match the reference';
 
-# 3. The documented contract values.
+# 3. The wcwidth contract: a codepoint's width is always one of -1 (control
+#    character, not printable), 0 (zero-width, does not advance the cursor),
+#    1 (narrow) or 2 (full-width) — these exact values must be preserved.
 is wcwidth(0x07), -1, 'BEL (0x07) is -1 (control character)';
 is wcwidth(0x200B), 0, 'ZERO WIDTH SPACE (0x200B) is 0';
 is wcwidth(0x3042), 2, 'HIRAGANA A (0x3042) is 2 (full width)';
